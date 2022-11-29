@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+
+    <!-- Tableau Extensions API Library  -->
+    <!-- If extensions are installed localy: <script src="extensions-api/lib/tableau.extensions.1.latest.js"></script>-->
+    <script src="https://extensions.tableauusercontent.com/resources/tableau.extensions.1.latest.min.js"></script>
+
+    <!-- Your JavaScript code that uses the Extensions API goes here -->
+    <script src="./script.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+      <div>
+        <label for="datasource-select">Select data source</label>
+        <select name="datasource" id="datasource-select"></select>
+        <label for="table-select">Select table</label>
+        <select name="table" id="table-select"></select>
+        <ul id="column-select">        
+        </ul>
+        <button type="button" id="view-table-button">view table</button>
+        <div id="table-container">
+          <table id="src-table"></table>
+        </div>
+        <form id="changes" method="post" action=".">
+          <input id="db-spec-hidden-input" name="database-specification" type="hidden">
+          <input id="table-name-hidden-input" name="table-name" type="hidden">
+          <input id="connection-type-hidden-input" name="connection-type" type="hidden">
+          <input id="update-data-button" name="update-data" type="submit" value="update data">
+        </form>
+        <div id="message"></div>
+      </div>
+  </body>
+</html>
