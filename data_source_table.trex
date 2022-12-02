@@ -2,7 +2,7 @@
    <manifest manifest-version="0.1" xmlns="http://www.tableau.com/xml/extension_manifest">
      <dashboard-extension id="com.example.extensions.hello.demo" extension-version="0.1.0">
        <default-locale>en_US</default-locale>
-       <name resource-id="name"/>
+       <name>writeback test</name>
        <description>Extension Description</description>
        <author name="Timotej Toepfer" email="timotej.toepfer@revolt.bi" organization="RevoltBI" website="https://www.revolt.bi"/>
        <min-api-version>1.0</min-api-version>
@@ -13,10 +13,8 @@
         <permissions>
             <permission>full data</permission>
         </permissions>
+        <context-menu>
+            <configure-context-menu-item />
+        </context-menu>
      </dashboard-extension>
-     <resources>
-       <resource id="name">
-         <text locale="en_US">Source table extension</text>
-       </resource>
-     </resources>
    </manifest>

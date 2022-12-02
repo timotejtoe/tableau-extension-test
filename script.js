@@ -1,9 +1,36 @@
 /* globals tableau*/
 //let data_source;
 let selected_worksheet;
-let database_name = "KEBOOLA_68";
+let database = "KEBOOLA_68";
 let username = "KEBOOLA_WORKSPACE_494363367";
-let password = "***";
+let password = "C5HPuwoXePNR7vfdxy8s4aMGRnhY9Dn4";
+
+function configure(){
+  let defaultValues = JSON.stringify({
+    database,
+    username,
+    password
+  });
+  tableau.extensions.ui
+  .displayDialogAsync("./configure_dialog.html", defaultValues, { height: 500, width: 500 })
+  .then((closePayload) => {
+    newValues = JSON.parse(closePayload);
+    database = newValues.database;
+    username = newValues.username;
+    password = newValues.password;
+  })
+  .catch((error) => {
+    // One expected error condition is when the popup is closed by the user (meaning the user
+    // clicks the 'X' in the top right of the dialog).  This can be checked for like so:
+    switch (error.errorCode) {
+      case tableau.ErrorCodes.DialogClosedByUser:
+        console.log('Dialog was closed by user');
+        break;
+      default:
+        console.error(error.message);
+    }
+  });
+}
 
 async function cell_change(event) {
   const element = $(event.target);
@@ -19,7 +46,7 @@ async function cell_change(event) {
     table: source_table.id.split(" (", 1)[0],
     schema: source_table.id.split(" (",2)[1].split(".",1)[0],
     host: connection_info.serverURI,
-    database: database_name,
+    database: database,
     username,
     password
   }
@@ -87,7 +114,7 @@ function show_data_in_table(source, headers, data){
 }
 
 $(document).ready(() => {
-  tableau.extensions.initializeAsync().then(() => {
+  tableau.extensions.initializeAsync({configure}).then(() => {
     console.log("Initialized!");
     const dashboard = tableau.extensions.dashboardContent.dashboard;
     addSelectionListeners(dashboard);

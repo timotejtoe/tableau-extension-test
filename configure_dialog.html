@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Settings Sample</title>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+
+    <!-- Extensions Library (this will be hosted on a CDN eventually) -->
+    <script src="https://extensions.tableauusercontent.com/resources/tableau.extensions.1.latest.min.js"></script>
+
+    <!-- Our extension's code -->
+    <script src="./configure_dialog.js"></script>
+  </head>
+  <body>
+    <form id="settings">
+        <label for="database-input">Name of database</label>
+        <input type="text" id="database-input" name="database">
+        <br>
+        <label for="username-input">Username</label>
+        <input type="text" id="username-input" name="username">
+        <br>
+        <label for="pasword-input">Password</label>
+        <input type="password" id="password-input" name="password">
+        <br>
+        <input type="submit" value="uložit">
+    </form>
+  </body>
+</html>
