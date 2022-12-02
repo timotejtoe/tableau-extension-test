@@ -1,157 +1,95 @@
 /* globals tableau*/
-let data_source;
+//let data_source;
+let selected_worksheet;
+let database_name = "KEBOOLA_68";
+let username = "KEBOOLA_WORKSPACE_494363367";
+let password = "***";
 
-function cell_change(event) {
-  const element = event.target;
-  const change_name = element.id.replace(/[^-]+-/, "change-");
-  if ($(`#changes input.data-change-hidden-input[name="${change_name}"]`).count>0){
-    $(`#changes input.data-change-hidden-input[name="${change_name}"]`).val(element.value);
-  }else{
-    let new_change = `<input type="hidden" class="data-change-hidden-input" name="${change_name}" value="${element.value}">`
-    $("#changes").append(new_change);
+async function cell_change(event) {
+  const element = $(event.target);
+  let source_id = element.closest("table").data("source");
+  let sources = await selected_worksheet.getDataSourcesAsync();
+  let source = sources.find(s=>s.id=source_id);
+  let source_table = (await source.getLogicalTablesAsync())[0];
+  let connection_info = (await source.getConnectionSummariesAsync())[0]
+  body={
+    category: element.data("category"),
+    column: element.data("column"),
+    new_value: element.val(),
+    table: source_table.id.split(" (", 1)[0],
+    schema: source_table.id.split(" (",2)[1].split(".",1)[0],
+    host: connection_info.serverURI,
+    database: database_name,
+    username,
+    password
+  }
+  $("#message").html("requested data update");
+  $.post("./database_handler.php", body, function(response){
+    //console.log("post response:", response);
+    source.refreshAsync();
+    $("#message").html(response);
+  });
+}
+
+function addSelectionListeners(dashboard){
+  for (let worksheet of dashboard.worksheets){
+    worksheet.addEventListener(tableau.TableauEventType.MarkSelectionChanged, async (event)=>{
+      selected_worksheet = event.sheet;
+      let marks = await event.sheet.getSelectedMarksAsync();
+      console.log(marks);
+      clear_tables();
+      for (let mark of marks.data){
+        source = mark.columns[0].fieldId.match(/\[([a-zA-Z0-9.]+)\]/)[1];
+        headers = [];
+        for(col of mark.columns){
+          headers.push(col.fieldName);
+        }
+        result_data = [];
+        for (let data_row of mark.data){
+          let result_row = []
+          for (let data_cell of data_row){
+            result_row.push(data_cell.formattedValue);
+          }
+          result_data.push(result_row);
+        }
+        show_data_in_table(source, headers, result_data);
+      }
+      $("#table-container").data("sheet", event.sheet);
+      $("#table-container table input").change(cell_change);
+    });
   }
 }
 
-async function initSourceSelect(dashboard) {
-  const selectElement = $("#datasource-select");
-  let options = {};
-  for (let sheet of dashboard.worksheets) {
-    let sources = await sheet.getDataSourcesAsync();
-    for (let source of sources) {
-      if (!(source.id in options)) {
-        options[source.id] = source.name;
+function clear_tables(){
+  $("table.src-table").remove();
+}
+
+function show_data_in_table(source, headers, data){
+  //console.log("showing in table", headers, data);
+  let table_html = "";
+  let table_row = "";
+  for (let header of headers){
+    table_row+="<th>"+header+"</th>";
+  }
+  table_html+= "<tr>"+table_row+"</tr>";
+  for (let row of data){
+    table_row="";
+    for (let col = 0; col<row.length; ++col){
+      if (col==2){
+        table_row += `<td><input type="text" data-category="${row[0]}" data-column="${row[1]}" value="${row[col]}"></td>`;
+      }else{
+        table_row += `<td>${row[col]}</td>`;
       }
     }
+    table_html+="<tr>"+table_row+"</tr>";
   }
-  let select_inner_html = "";
-  for (let source_id in options) {
-    select_inner_html += `<option value="${source_id}">${options[source_id]}</option>\n`;
-  }
-  selectElement.html(select_inner_html);
-  initTableSelect(dashboard);
-}
-
-async function initTableSelect(dashboard) {
-  const data_source_id = $("#datasource-select")[0].value;
-  data_source = null;
-  for (let sheet of dashboard.worksheets) {
-    let sources = await sheet.getDataSourcesAsync();
-    for (let source of sources) {
-      if (source.id == data_source_id) {
-        data_source = source;
-        break;
-      }
-    }
-    if (data_source !== null) break;
-  }
-  let tables = await data_source.getLogicalTablesAsync();
-  let select_inner_html = "";
-  for (let table of tables) {
-    let table_name = table.caption;
-    let table_id = table.id;
-    select_inner_html += `<option value="${table_id}">${table_name}</option>\n`;
-  }
-  $("#table-select").html(select_inner_html);
-  initColumnSelect();
-}
-
-async function initColumnSelect() {
-  let table_id = $("#table-select")[0].value;
-  let table_data = await data_source.getLogicalTableDataAsync(table_id);
-  let select_inner_html = "";
-  for (let col=0; col<table_data.columns.length; ++col) {
-    select_inner_html += `<li><input type=checkbox id="checkbox-col${col}">${table_data.columns[col].fieldName}</li>`;
-  }
-  $("#column-select").html(select_inner_html);
-}
-
-async function showTable() {
-  let table_id = $("#table-select")[0].value;
-  let table_data = await data_source.getLogicalTableDataAsync(table_id);
-  console.log("table data", table_data);
-  let table_inner_html = "";
-  let cols_to_view = [];
-  for (let col = 0; col < table_data.columns.length; col++) {
-    if ($("#checkbox-col" + col)[0].checked) {
-      cols_to_view.push(col);
-      table_inner_html += "<th>" + table_data.columns[col].fieldName + "</th>";
-    }
-  }
-  table_inner_html = "<tr>" + table_inner_html + "</tr>\n";
-  let row_count = table_data.data.length;
-  for (let i = 0; i < (row_count < 10 ? row_count : 10); ++i) {
-    let row = "";
-    for (let j of cols_to_view) {
-      row += `<td><input id="td-${
-        table_data.data[i][0].value}-${
-        table_data.columns[j].fieldName
-      }" type="text" value="${table_data.data[i][j].value}"></td>`;
-    }
-    row = "<tr>" + row + "</tr>\n";
-    table_inner_html += row;
-  }
-  console.log("data_source", data_source);
-  let connection_info = (await data_source.getConnectionSummariesAsync())[0];
-  console.log("table_id:", table_id);
-  console.log("connection info:", connection_info);
-  let database_specification;
-  let table_name;
-  if (connection_info.type == "MySQL"){
-    let host = connection_info.serverURI;
-    let dbname = data_source.name.match(/\(([^)]+)\)/)[1];
-    database_specification = `host=${host};dbname=${dbname}`;
-    table_name = table_id.match(/^(\w+)_[A-Z0-9]+/)[1];
-  }
-  else if (connection_info.type == "Snowflake"){
-    let database_name = "KEBOOLA_68";
-    let database_schema = table_id.split(" (",2)[1].split(".",1)[0];
-    database_specification = `Server=${connection_info.serverURI};Database=${database_name};uid=KEBOOLA_${database_schema};schema=${database_schema}`
-    table_name = table_id.split(" (", 1)[0];
-  }else{
-    console.log("unknown connection type "+connection_info.type);
-  }
-  console.log("database spec:", database_specification);
-  console.log("table_name: ", table_name)
-  $("#connection-type-hidden-input").val(connection_info.type);
-  $("#db-spec-hidden-input").val(database_specification);
-  $("#table-name-hidden-input").val(table_name);
-
-  $("#src-table").html(table_inner_html);
-  $("#src-table td").change(cell_change);
+  $("#table-container").append('<table data-source="'+source+'" class="src-table">'+table_html+'</table>');
 }
 
 $(document).ready(() => {
   tableau.extensions.initializeAsync().then(() => {
     console.log("Initialized!");
     const dashboard = tableau.extensions.dashboardContent.dashboard;
-    initSourceSelect(dashboard).then(async () => {
-      console.log("adding listener for datasource select");
-      $("#datasource-select").change(() => {
-        console.log("datasource select changed");
-        initTableSelect(dashboard);
-      });
-      $("#table-select").change(() => {
-        console.log("table select changed");
-        initColumnSelect();
-      });
-    });
-    $("#view-table-button").click(() => {
-      showTable();
-    });
-    $('form').submit((e)=>{
-      e.preventDefault();
-      console.log("posting");
-      let body=$("#changes").serialize();
-      console.log("changes: ",body);
-      $.post("./database_handler.php", body, function(response){
-        //console.log("post response:", response);
-        console.log("posted");
-        data_source.refreshAsync();
-        $("#message").html(response);
-        $("#changes input.data-change-hidden-input").remove();
-        showTable();
-      });
-      $("#message").html("updating database...")
-    });
+    addSelectionListeners(dashboard);
   });
 });
