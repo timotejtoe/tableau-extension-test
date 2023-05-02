@@ -3,8 +3,11 @@ let data_source;
 let selected_worksheet;
 let database = "KEBOOLA_68";
 let username = "KEBOOLA_WORKSPACE_494363367";
-let password = "C5HPuwoXePNR7vfdxy8s4aMGRnhY9Dn4";
+//let password = "C5HPuwoXePNR7vfdxy8s4aMGRnhY9Dn4";
+let password = "";
+let referencable_cols = [];
 let request_body = {};
+let selected_marks = {headers:[], data:[]}
 
 function configure(){
   let defaultValues = JSON.stringify({
@@ -18,7 +21,9 @@ function configure(){
     newValues = JSON.parse(closePayload);
     database = newValues.database;
     username = newValues.username;
+    request_body.username = username;
     password = newValues.password;
+    request_body.password = password;
   })
   .catch((error) => {
     // One expected error condition is when the popup is closed by the user (meaning the user
@@ -35,12 +40,31 @@ function configure(){
 
 async function cell_change(event) {
   const element = $(event.target);
-  change = {
-    category: element.data("category"),
+  let rownum = element.data("rownum");
+  let value_conditions = {}
+  for (let [colnum, colname] of selected_marks.headers.entries()){
+    if (colname == "Measure Values"){
+      colname = selected_marks.data[rownum][selected_marks.headers.indexOf("Measure Names")];
+    }
+    if (referencable_cols.includes(colname)){
+      let val = selected_marks.data[rownum][colnum];
+      if (val.match(/^\d+,\d+$/)){
+        val = val.replace(",", ".");
+      }
+      value_conditions[colname] = val;
+    }
+  }
+  let new_value = element.val();
+  if (new_value.match(/^\d+,\d+$/)){
+    new_value = new_value.replace(",", ".");
+  }
+  let change = {
+    conditions: value_conditions,
     column: element.data("column"),
-    new_value: element.val()
+    new_value
   }
   request_body.changes.push(change);
+  selected_marks.data[rownum][element.data('colnum')] = element.val();
 }
 
 function addSelectionListeners(dashboard){
@@ -54,6 +78,7 @@ function addSelectionListeners(dashboard){
       source_id = markCollection.columns[0].fieldId.match(/\[([a-zA-Z0-9.]+)\]/)[1];
       let sources = await selected_worksheet.getDataSourcesAsync();
       data_source = sources.find(s=>s.id=source_id);
+      referencable_cols = data_source.fields.filter((field)=>!(field.isCalculatedField || field.isCombinedField || field.isGenerated)).map(field=>field.id)
       let source_table = (await data_source.getLogicalTablesAsync())[0];
       let connection_info = (await data_source.getConnectionSummariesAsync())[0];
       request_body={
@@ -66,19 +91,19 @@ function addSelectionListeners(dashboard){
         changes:[]
       }
 
-      headers = [];
+      selected_marks.headers = [];
       for(col of markCollection.columns){
-        headers.push(col.fieldName);
+        selected_marks.headers.push(col.fieldName);
       }
-      result_data = [];
+      selected_marks.data = [];
       for (let data_row of markCollection.data){
         let result_row = []
         for (let data_cell of data_row){
           result_row.push(data_cell.formattedValue);
         }
-        result_data.push(result_row);
+        selected_marks.data.push(result_row);
       }
-      show_data_in_table(headers, result_data);
+      show_data_in_table(selected_marks.headers, selected_marks.data);
     
       $("#table-container table input").change(cell_change);
     });
@@ -92,8 +117,10 @@ function makeRequest(){
       //console.log("post response:", response);
       //source.refreshAsync();
       $("#message").html(response);
-    });
-    request_body.changes = [];
+      request_body.changes = [];
+    }).fail(()=>{
+      $("#message").html("<p>request failed!</p>");
+    })
     data_source.refreshAsync();
   }
 }
@@ -111,13 +138,14 @@ function show_data_in_table(headers, data){
     table_row+="<th>"+header+"</th>";
   }
   table_html+= "<tr>"+table_row+"</tr>";
-  for (let row of data){
+  for (let row =0; row < data.length; ++row){
     table_row="";
-    for (let col = 0; col<row.length; ++col){
-      if (col==2){
-        table_row += `<td><input type="text" data-category="${row[0]}" data-column="${row[1]}" value="${row[col]}"></td>`;
+    for (let col = 0; col<data[row].length; ++col){
+      let col_identifier = headers[col] == "Measure Values" ? data[row][headers.indexOf("Measure Names")] : headers[col];
+      if (referencable_cols.includes(col_identifier)){
+        table_row += `<td><input type="text" data-rownum="${row}" data-column="${col_identifier}" data-colnum="${col}" value="${data[row][col]}"></td>`;
       }else{
-        table_row += `<td>${row[col]}</td>`;
+        table_row += `<td>${data[row][col]}</td>`
       }
     }
     table_html+="<tr>"+table_row+"</tr>";
@@ -126,6 +154,9 @@ function show_data_in_table(headers, data){
 }
 
 $(document).ready(() => {
+  console.log("cookie:", document.cookie);
+  //document.cookie="ukladase=true";
+  //console.log("new cookie:", document.cookie);
   tableau.extensions.initializeAsync({configure}).then(() => {
     console.log("Initialized!");
     const dashboard = tableau.extensions.dashboardContent.dashboard;
