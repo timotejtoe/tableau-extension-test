@@ -1,12 +1,15 @@
 <?php
 function connection_warning_handler($severity, $message, $filename, $lineno){
-    echo "<p>Unable to connect to database</p>";
     if (str_starts_with($message, "odbc_connect(): ")){
+        echo "<p>Unable to connect to database:</p>";
         $message = substr($message, 16);
+    }else if (str_starts_with($message, "odbc_exec(): ")){
+        echo "<p>Unable to update data in database:</p>";
+        $message = substr($message, 13);
     }
     echo "<p>".$message."</p>";
     http_response_code(404);
-    exit(1);
+    exit();
 }
 
 
@@ -24,7 +27,9 @@ foreach ($_POST["changes"] as $change){
         return "\"$col_name\" = '$col_val'";
     }, array_keys($change["conditions"]), $change["conditions"]);
     $query .= " WHERE ".implode(" AND ", $conds)."; ";
-    echo $query;
+    echo "<p>".$query."</p>";
+    set_error_handler("connection_warning_handler");
     odbc_exec($connection, $query);
+    restore_error_handler();
 }
 echo "<p>Updated data.</p>";

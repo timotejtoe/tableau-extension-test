@@ -3,8 +3,8 @@ let data_source;
 let selected_worksheet;
 let database = "KEBOOLA_68";
 let username = "KEBOOLA_WORKSPACE_494363367";
-//let password = "C5HPuwoXePNR7vfdxy8s4aMGRnhY9Dn4";
-let password = "";
+let password = "C5HPuwoXePNR7vfdxy8s4aMGRnhY9Dn4";
+//let password = ""
 let referencable_cols = [];
 let request_body = {};
 let selected_marks = {headers:[], data:[]}
@@ -65,47 +65,57 @@ async function cell_change(event) {
   }
   request_body.changes.push(change);
   selected_marks.data[rownum][element.data('colnum')] = element.val();
+  $("#update-button").prop("disabled", false);
+}
+
+async function refreshSelectedMarks(){
+  let markCollections = await selected_worksheet.getSelectedMarksAsync();
+  console.log(markCollections);
+  if (markCollections.data.length > 0 && markCollections.data[0].columns.length > 0){
+    let markCollection = markCollections.data[0]
+    source_id = markCollection.columns[0].fieldId.match(/\[([a-zA-Z0-9.]+)\]/)[1];
+    let sources = await selected_worksheet.getDataSourcesAsync();
+    data_source = sources.find(s=>s.id=source_id);
+    referencable_cols = data_source.fields.filter((field)=>!(field.isCalculatedField || field.isCombinedField || field.isGenerated)).map(field=>field.id)
+    let source_table = (await data_source.getLogicalTablesAsync())[0];
+    let connection_info = (await data_source.getConnectionSummariesAsync())[0];
+    request_body={
+      table: source_table.id.split(" (", 1)[0],
+      schema: source_table.id.split(" (",2)[1].split(".",1)[0],
+      host: connection_info.serverURI,
+      database: database,
+      username,
+      password,
+      changes:[]
+    }
+    $("#update-button").prop("disabled", true);
+
+    selected_marks.headers = [];
+    for(col of markCollection.columns){
+      selected_marks.headers.push(col.fieldName);
+    }
+    selected_marks.data = [];
+    for (let data_row of markCollection.data){
+      let result_row = []
+      for (let data_cell of data_row){
+        result_row.push(data_cell.formattedValue);
+      }
+      selected_marks.data.push(result_row);
+    }
+    show_data_in_table(selected_marks.headers, selected_marks.data);
+
+    $("#table-container table input").change(cell_change);
+  }else{
+    clear_table();
+  }
 }
 
 function addSelectionListeners(dashboard){
   for (let worksheet of dashboard.worksheets){
     worksheet.addEventListener(tableau.TableauEventType.MarkSelectionChanged, async (event)=>{
-      makeRequest();
+      //makeRequest();
       selected_worksheet = event.sheet;
-      let markCollections = await event.sheet.getSelectedMarksAsync();
-      console.log(markCollections);
-      let markCollection = markCollections.data[0]
-      source_id = markCollection.columns[0].fieldId.match(/\[([a-zA-Z0-9.]+)\]/)[1];
-      let sources = await selected_worksheet.getDataSourcesAsync();
-      data_source = sources.find(s=>s.id=source_id);
-      referencable_cols = data_source.fields.filter((field)=>!(field.isCalculatedField || field.isCombinedField || field.isGenerated)).map(field=>field.id)
-      let source_table = (await data_source.getLogicalTablesAsync())[0];
-      let connection_info = (await data_source.getConnectionSummariesAsync())[0];
-      request_body={
-        table: source_table.id.split(" (", 1)[0],
-        schema: source_table.id.split(" (",2)[1].split(".",1)[0],
-        host: connection_info.serverURI,
-        database: database,
-        username,
-        password,
-        changes:[]
-      }
-
-      selected_marks.headers = [];
-      for(col of markCollection.columns){
-        selected_marks.headers.push(col.fieldName);
-      }
-      selected_marks.data = [];
-      for (let data_row of markCollection.data){
-        let result_row = []
-        for (let data_cell of data_row){
-          result_row.push(data_cell.formattedValue);
-        }
-        selected_marks.data.push(result_row);
-      }
-      show_data_in_table(selected_marks.headers, selected_marks.data);
-    
-      $("#table-container table input").change(cell_change);
+      refreshSelectedMarks();
     });
   }
 }
@@ -117,16 +127,21 @@ function makeRequest(){
       //console.log("post response:", response);
       //source.refreshAsync();
       $("#message").html(response);
+    }).fail((resp)=>{
+      $("#message").html("<p>request failed!</p>"+resp.responseText);
+    }).always(()=>{
       request_body.changes = [];
-    }).fail(()=>{
-      $("#message").html("<p>request failed!</p>");
+      $("#update-button").prop("disabled", true);
+      data_source.refreshAsync();
+      refreshSelectedMarks();
     })
-    data_source.refreshAsync();
   }
 }
 
 function clear_table(){
   $("table.src-table").remove();
+  $("#nodata-message").show();
+  $("#update-button").hide();
 }
 
 function show_data_in_table(headers, data){
@@ -150,7 +165,9 @@ function show_data_in_table(headers, data){
     }
     table_html+="<tr>"+table_row+"</tr>";
   }
+  $("#nodata-message").hide();
   $("#table-container").append('<table class="src-table">'+table_html+'</table>');
+  $("#update-button").show();
 }
 
 $(document).ready(() => {
